@@ -22,14 +22,16 @@ export class App extends Component{
     isEmpty: false,
     isQueryEmpty: false,
     isModalShown: false,
-    bigImage:'',
+    bigImage:{},
   }
 
   abortCtrl;
 
   async componentDidUpdate(_, prevState) {
     const { query, page } = this.state;
-    if (prevState.query !== query || prevState.page!==page) {
+    
+    if (prevState.query !== query || prevState.page !== page) {
+      const queryToSearch = query.slice(query.indexOf('/') + 1, query.length);
       try
       {
         if (this.abortCtrl) {
@@ -41,11 +43,10 @@ export class App extends Component{
           this.setState({ isQueryEmpty: true });
           return;
         }
-        const response = await getImages(query, page, this.abortCtrl);
+        const response = await getImages(queryToSearch, page, this.abortCtrl);
         const {
           data: { hits: images, totalHits },
           config: { params: { page: currPage, per_page } } } = response;
-        console.log(typeof images[0].id)
         if (!images.length) {
           this.setState({ isEmpty: true });
           return;
@@ -80,11 +81,8 @@ export class App extends Component{
   }
   
   onFormSubmit = (value) => {
-    if (this.state.query === value) {
-      return;
-    }
     this.setState({
-      query: value,
+      query: `${Date.now()}/${value}`,
       images: [],
       page: 1,
       error: null,  
@@ -92,7 +90,7 @@ export class App extends Component{
       isEmpty: false,
       isQueryEmpty: !value,
       isModalShown: false,
-      bigImage:'',
+      bigImage:{},
     })
   }
   

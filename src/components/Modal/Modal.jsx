@@ -47,7 +47,7 @@ Modal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   bigImg: PropTypes.shape({
-    bigImgURL: PropTypes.string.isRequired,
-    altDescr: PropTypes.string.isRequired,
+    bigImgURL: PropTypes.string,
+    altDescr: PropTypes.string,
   }).isRequired,
 };
