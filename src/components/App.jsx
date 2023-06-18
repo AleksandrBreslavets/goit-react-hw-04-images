@@ -1,4 +1,5 @@
-import { Component } from "react";
+import { useState, useEffect, useRef } from "react";
+import toast, { Toaster } from 'react-hot-toast';
 import { Searchbar } from "./Searchbar/Searchbar";
 import { getImages } from "helpers/api";
 import { ImageGallery } from "./ImageGallery/ImageGallery";
@@ -9,110 +10,87 @@ import { Wrapper, Text } from "./App.styled";
 
 const EMPTY_MSG = 'Sorry. There are not such images...';
 const EMPTY_INPUT_MSG = "Please, type something in input to search.";
-const ERROR_MSG="Something went wrong. Try to reload the page!"
+const ERROR_MSG = "Something went wrong. Try to reload the page!";
 
-export class App extends Component{
-  state = {
-    query: '',
-    images: [],
-    page: 1,
-    isLoading: false,
-    error: null,  
-    isShowBtn: false,
-    isEmpty: false,
-    isQueryEmpty: false,
-    isModalShown: false,
-    bigImage:{},
-  }
+export const App = () => {
 
-  abortCtrl;
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isShowBtn, setIsShowBtn] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(false);
+  const [isModalShown, setIsModalShown] = useState(false);
+  const [bigImage, setBigImage] = useState({});
+  const abortCtrl = useRef();
 
-  async componentDidUpdate(_, prevState) {
-    const { query, page } = this.state;
-    
-    if (prevState.query !== query || prevState.page !== page) {
-      const queryToSearch = query.slice(query.indexOf('/') + 1, query.length);
-      try
-      {
-        if (this.abortCtrl) {
-          this.abortCtrl.abort();
+  useEffect(() => {
+    const queryToSearch = query.slice(query.indexOf('/') + 1, query.length);
+    if (queryToSearch || page !== 1) {
+      async function getImagesByQuery() {
+        try {
+          if (abortCtrl.current) {
+            abortCtrl.current.abort();
+          }
+          abortCtrl.current = new AbortController();
+          setIsLoading(true);
+          setError(null);
+          const response = await getImages(queryToSearch, page, abortCtrl.current);
+          const {
+            data: { hits: images, totalHits },
+            config: { params: { page: currPage, per_page } }
+          } = response;
+          
+          if (!images.length) {
+            setIsEmpty(true);
+            return;
+          }
+          setImages(prevImages => [...prevImages, ...images]);
+          setIsShowBtn(currPage < Math.ceil(totalHits / per_page));
         }
-        this.abortCtrl = new AbortController();
-        this.setState({ isLoading: true, error: null });
-        if (!query) {
-          this.setState({ isQueryEmpty: true });
-          return;
+        catch (error) {
+          if (error.code !== 'ERR_CANCELED') {
+            setError(ERROR_MSG);
+          }
         }
-        const response = await getImages(queryToSearch, page, this.abortCtrl);
-        const {
-          data: { hits: images, totalHits },
-          config: { params: { page: currPage, per_page } } } = response;
-        if (!images.length) {
-          this.setState({ isEmpty: true });
-          return;
-        }
-        
-        this.setState(prevState => ({
-          images: [...prevState.images, ...images],
-          isShowBtn: currPage < Math.ceil(totalHits / per_page),
-        })); 
-      }
-      catch (error)
-      {
-        if (error.code !== 'ERR_CANCELED') {
-          this.setState({ error: ERROR_MSG });
+        finally {
+          setIsLoading(false);
         }
       }
-      finally
-      {
-        this.setState({isLoading:false})
-      }
-    }   
-  }
+      getImagesByQuery();
+    }
+  }, [query, page])
 
-  componentWillUnmount() {
-    this.abortCtrl.abort();
-  }
-
-  onLoadMoreBtnClick = e => {
-    this.setState(prevState => ({
-      page: prevState.page + 1
-    }))
-  }
+  const onFormSubmit = (value) => {
+    if (!value) toast.error(EMPTY_INPUT_MSG);
+    setQuery(`${Date.now()}/${value}`);
+    setImages([]);
+    setPage(1);
+    setError(null);
+    setIsShowBtn(false);
+    setIsEmpty(false);
+    setIsModalShown(false);
+    setBigImage({});
+  };
   
-  onFormSubmit = (value) => {
-    this.setState({
-      query: `${Date.now()}/${value}`,
-      images: [],
-      page: 1,
-      error: null,  
-      isShowBtn: false,
-      isEmpty: false,
-      isQueryEmpty: !value,
-      isModalShown: false,
-      bigImage:{},
-    })
-  }
-  
-  onModalOpen = (e) => {
-    const altDescr=e.target.alt
+  const onModalOpen = (e) => {
+    const altDescr = e.target.alt
     const bigImgURL = e.target.dataset.bigphoto;
-    this.setState({isModalShown:true, bigImage:{bigImgURL, altDescr}})
-  }
-  onModalClose = () => {
-    this.setState({isModalShown:false})
-  }
-  render() {
-    const { images,isLoading, isShowBtn, isQueryEmpty, isEmpty, error, isModalShown, bigImage} = this.state;
-    return <Wrapper>
-      <Searchbar onSubmit={this.onFormSubmit}/>
-      <ImageGallery images={images} onOpen={this.onModalOpen} />
-      {isQueryEmpty && <Text>{EMPTY_INPUT_MSG}</Text>}
-      {isEmpty && <Text>{EMPTY_MSG}</Text>}
-      {error && <Text>{ERROR_MSG}</Text>}
-      {isLoading && <Loader/>}
-      {isShowBtn && <Button onClick={this.onLoadMoreBtnClick}/>}
-      <Modal isOpen={isModalShown} onClose={this.onModalClose} bigImg={bigImage}></Modal>
-    </Wrapper>
-  }
+    setIsModalShown(true);
+    setBigImage({ bigImgURL, altDescr });
+  };
+
+  return <Wrapper>
+    <Searchbar onSubmit={onFormSubmit} />
+    <ImageGallery images={images} onOpen={onModalOpen} />
+    {isEmpty && <Text>{EMPTY_MSG}</Text>}
+    {error && <Text>{ERROR_MSG}</Text>}
+    {isLoading && <Loader />}
+    {isShowBtn && <Button onClick={() => setPage(prevPage => prevPage + 1)} />}
+    <Modal isOpen={isModalShown} onClose={() => setIsModalShown(false)} bigImg={bigImage}></Modal>
+    <Toaster
+      position="top-right"
+      toastOptions={{ duration: 2000 }} />
+  </Wrapper>
 }
